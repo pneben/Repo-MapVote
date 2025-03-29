@@ -275,7 +275,7 @@ namespace MapVote {
                 GameDirector.instance.DisableInput = true;
             }
 
-            VotePopup = MenuAPI.CreateREPOPopupPage("Vote for the next map", true, false, 0f, isInMenu ? new Vector2(40f, 0f) : new Vector2(-100f,0f));
+            VotePopup = MenuAPI.CreateREPOPopupPage("Next map", true, false, 0f, isInMenu ? new Vector2(40f, 0f) : new Vector2(-100f,0f));
             var runManger = FindObjectOfType<RunManager>();
 
             var levels = runManger.levels;
