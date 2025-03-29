@@ -11,6 +11,8 @@ namespace MapVote.Patches
         {
             if(menuPageIndex == MenuPageIndex.Lobby)
             {
+                MapVote.Reset();
+                MapVote.WonMap = null;
                 MapVote.CreateVotePopup(true);
                 
                 if (MapVote.IS_DEBUG && SemiFunc.IsMasterClient() && SemiFunc.RunIsLobbyMenu())
