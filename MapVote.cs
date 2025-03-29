@@ -91,15 +91,15 @@ namespace MapVote {
 
             if (ButtonStartHookRunAmount > 0)
             {
-                orig(self);
                 ButtonStartHookRunAmount = 0;
+                orig(self);
             } else
             {
+                ButtonStartHookRunAmount++;
                 var map = GetWinningMap();
                 OnVoteEndedEvent?.RaiseEvent(map, NetworkingEvents.RaiseOthers, SendOptions.SendReliable);
                 Instance.StartCoroutine(OnVotingDone(map));
             }
-            ButtonStartHookRunAmount++;
         }
 
         public void Awake()
@@ -224,6 +224,8 @@ namespace MapVote {
             }
 
             Instance.StartCoroutine(StartCountdown());
+
+            yield break;
         }
 
         public static IEnumerator StartCountdown()
@@ -261,7 +263,12 @@ namespace MapVote {
         {
             MenuAPI.CloseAllPagesAddedOnTop();
             VoteOptionButtons.Clear();
-            VotePopup = null;
+
+            if(VotePopup != null)
+            {
+                VotePopup.ClosePage(true);
+                VotePopup = null;
+            }
 
             if (RunManager.instance.levelCurrent.name == TRUCK_LEVEL_NAME)
             {
