@@ -35,5 +35,4 @@
       <HintPath>..\BepInDependencies\REPOLib.dll</HintPath>
     </Reference>
   </ItemGroup>
-
 </Project>
