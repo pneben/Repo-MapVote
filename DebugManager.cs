@@ -13,14 +13,12 @@ namespace MapVote
 
         private static void PopulateMockData()
         {
-            MapVote.CurrentVotes[0] = "Level - Arctic";
-            MapVote.CurrentVotes[1] = "Level - Arctic";
-            MapVote.CurrentVotes[2] = "Level - Manor";
-            MapVote.CurrentVotes[3] = "Level - Manor";
-            MapVote.CurrentVotes[4] = "Level - Wizard";
-            MapVote.CurrentVotes[5] = MapVote.VOTE_RANDOM_LABEL;
-            MapVote.CurrentVotes[7] = MapVote.VOTE_RANDOM_LABEL;
-            MapVote.CurrentVotes[8] = MapVote.VOTE_RANDOM_LABEL;
+            MapVote.CurrentVotes[10] = "Level - Arctic";
+            MapVote.CurrentVotes[11] = "Level - Manor";
+            MapVote.CurrentVotes[12] = "Level - Wizard";
+            MapVote.CurrentVotes[13] = "Level - Wizard";
+            MapVote.CurrentVotes[14] = "Level - Wizard";
+            MapVote.CurrentVotes[15] = MapVote.VOTE_RANDOM_LABEL;
         }
     }
 }

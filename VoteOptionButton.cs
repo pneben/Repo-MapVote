@@ -38,8 +38,7 @@ namespace MapVote
             Color mainColor = _highlight == true ? Color.green : _ownVote == this.Level ? Color.yellow : Color.white;
 
             this.Button.labelTMP.text =
-                $"{Utilities.ColorString((this.IsRandomButton ?
-                    $"{MapVote.VOTE_RANDOM_LABEL} - {Utilities.ColorString(this.GetVotes(votes).ToString(), Color.yellow)}" : $"Vote for {this.Level.Replace("Level -", "")} - {Utilities.ColorString(this.GetVotes(votes).ToString(), Color.yellow)}"), mainColor)}</color>";
+                $"{Utilities.ColorString(($"Vote for <color={LevelColorDictionary.GetColor(this.Level)}>{(this.IsRandomButton ? MapVote.VOTE_RANDOM_LABEL : Utilities.RemoveLevelPrefix(this.Level))}</color>\t   {Utilities.ColorString(new string('I', this.GetVotes(votes)), Color.green)}"), mainColor)}";
         }
     }
 }

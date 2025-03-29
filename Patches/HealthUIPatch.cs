@@ -1,4 +1,7 @@
-﻿using HarmonyLib;
+﻿using ExitGames.Client.Photon;
+using HarmonyLib;
+using MenuLib;
+using REPOLib.Modules;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -15,8 +18,11 @@ namespace MapVote.Patches
         {
             if (RunManager.instance.levelCurrent.name == MapVote.REQUEST_VOTE_LEVEL)
             {
-                Debug.Log("Running coroutine");
-                MapVote.CreateVotePopup();
+                if(SemiFunc.IsMasterClient())
+                {
+                    MapVote.Instance.StartCoroutine(MapVote.WaitForVote());
+                }
+                MapVote.CreateVotePopup(false);
             }
         }
     }
