@@ -24,7 +24,7 @@ namespace MapVote
 
             foreach (var entry in votes)
             {
-                if (entry.Value == this.Level)
+                if (entry.Value == Level)
                 {
                     votesNum++;
                 }
@@ -35,10 +35,12 @@ namespace MapVote
 
         public void UpdateLabel(Dictionary<int, string> votes, string? _ownVote, bool _highlight = false)
         {
-            Color mainColor = _highlight == true ? Color.green : _ownVote == this.Level ? Color.yellow : Color.white;
+            var playerCount = Math.Min(GameDirector.instance.PlayerList.Count, 12);
+            var votesCount = GetVotes(votes);
+            Color mainColor = _highlight == true ? Color.green : _ownVote == Level ? Color.yellow : Color.white;
 
-            this.Button.labelTMP.text =
-                $"{Utilities.ColorString(($"Vote for <color={LevelColorDictionary.GetColor(this.Level)}>{(this.IsRandomButton ? MapVote.VOTE_RANDOM_LABEL : Utilities.RemoveLevelPrefix(this.Level))}</color>\t   {Utilities.ColorString(new string('I', this.GetVotes(votes)), Color.green)}"), mainColor)}";
+            Button.labelTMP.text =
+                $"{Utilities.ColorString($"Vote for <color={LevelColorDictionary.GetColor(Level)}>{(IsRandomButton ? MapVote.VOTE_RANDOM_LABEL : Utilities.RemoveLevelPrefix(Level))}</color>\t   {Utilities.ColorString(new string('I', votesCount), Color.green)}{Utilities.ColorString(new string('I', playerCount - votesCount), Color.gray)}", mainColor)}";
         }
     }
 }

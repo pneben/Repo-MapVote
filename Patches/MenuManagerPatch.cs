@@ -11,11 +11,18 @@ namespace MapVote.Patches
         {
             if(menuPageIndex == MenuPageIndex.Lobby)
             {
-                MapVote.Reset();
-                MapVote.WonMap = null;
-                MapVote.CreateVotePopup(true);
+                if(SemiFunc.IsMasterClientOrSingleplayer())
+                {
+                    MapVote.Reset();
+                    MapVote.WonMap = null;
+                }
+
+                if(!MapVote.HideInMenu)
+                {
+                    MapVote.CreateVotePopup(true);
+                }
                 
-                if (MapVote.IS_DEBUG && SemiFunc.IsMasterClient() && SemiFunc.RunIsLobbyMenu())
+                if (MapVote.IS_DEBUG && SemiFunc.IsMasterClientOrSingleplayer() && SemiFunc.RunIsLobbyMenu())
                 {
                     DebugManager.InitializeDebug();
                 }

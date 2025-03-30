@@ -18,10 +18,7 @@ namespace MapVote.Patches
         {
             if (RunManager.instance.levelCurrent.name == MapVote.REQUEST_VOTE_LEVEL)
             {
-                if(SemiFunc.IsMasterClient())
-                {
-                    MapVote.Instance.StartCoroutine(MapVote.WaitForVote());
-                }
+                MapVote.Instance.StartCoroutine(MapVote.WaitForVote());
                 MapVote.CreateVotePopup(false);
             }
         }

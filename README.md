@@ -1,4 +1,5 @@
-﻿# Map Vote 🗺️
+# Map Vote 🗺️
+#### View on [Thunderstore](https://thunderstore.io/c/repo/p/Patrick/MapVote/)</br>
 Allows you and your friends to vote for the next map to play!
 |Vote for any map ✅| Or randomly select one 🎲 | Vote again after each map 🗺️ |
 |--|--|--|
@@ -7,6 +8,10 @@ Allows you and your friends to vote for the next map to play!
 ### Found an issue or a feature idea?
 - Report it on [GitHub](https://github.com/pneben/Repo-MapVote) or...
 - on Discord `patrick_135`
+
+### Compatibility Patches
+- [ViViKo's StartInShop](https://thunderstore.io/c/repo/p/ViViKo/StartInShop/)
+    - Voting Menu would now not show up in the Lobby Menu
 
 <details><summary>For Developers</summary><br>
 

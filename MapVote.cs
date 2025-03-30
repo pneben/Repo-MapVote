@@ -14,12 +14,15 @@ using Photon.Realtime;
 using Sirenix.Serialization.Utilities;
 using MenuLib.MonoBehaviors;
 using BepInEx.Configuration;
+using BepInEx.Bootstrap;
+using System.Xml.Schema;
+using System.Globalization;
 
 namespace MapVote {
-
     [BepInPlugin(MOD_GUID, MOD_NAME, MOD_VERSION)]
     [BepInDependency(REPOLib.MyPluginInfo.PLUGIN_GUID, BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("nickklmao.menulib", BepInDependency.DependencyFlags.HardDependency)]
+    [BepInDependency("ViViKo.StartInShop", BepInDependency.DependencyFlags.SoftDependency)]
     internal sealed class MapVote : BaseUnityPlugin
     {
         // Constants
@@ -32,6 +35,9 @@ namespace MapVote {
         public const string REQUEST_VOTE_LEVEL = TRUCK_LEVEL_NAME;
 
         public const bool IS_DEBUG = false;
+
+        // Flags
+        public static bool HideInMenu = false;
 
         // Harmony
         internal Harmony? Harmony { get; set; }
@@ -68,7 +74,7 @@ namespace MapVote {
             AccessTools.DeclaredMethod(typeof(RunManager), nameof(RunManager.SetRunLevel)), HookRunManagerSetRunLevel);
         private static void HookRunManagerSetRunLevel(Action<RunManager> orig, RunManager self)
         {
-            if (SemiFunc.IsMasterClient() && ShouldHookRunMangerSetRunLevel)
+            if (SemiFunc.IsMasterClientOrSingleplayer() && ShouldHookRunMangerSetRunLevel)
             {
                 self.levelCurrent = self.levels.Find(x => x.name == WonMap);
                 ShouldHookRunMangerSetRunLevel = false;
@@ -89,7 +95,7 @@ namespace MapVote {
                 return;
             }
 
-            if (ButtonStartHookRunAmount > 0)
+            if (ButtonStartHookRunAmount > 0 || HideInMenu)
             {
                 ButtonStartHookRunAmount = 0;
                 orig(self);
@@ -97,6 +103,7 @@ namespace MapVote {
             {
                 ButtonStartHookRunAmount++;
                 var map = GetWinningMap();
+
                 OnVoteEndedEvent?.RaiseEvent(map, NetworkingEvents.RaiseOthers, SendOptions.SendReliable);
                 Instance.StartCoroutine(OnVotingDone(map));
             }
@@ -107,12 +114,13 @@ namespace MapVote {
             Instance = this;
 
             // Prevent the plugin from being deleted
-            this.gameObject.transform.parent = null;
-            this.gameObject.hideFlags = HideFlags.HideAndDontSave;
+            gameObject.transform.parent = null;
+            gameObject.hideFlags = HideFlags.HideAndDontSave;
 
             Patch();
 
-            VotingTime = Config.Bind<int>("General", "Voting Time", 10, new ConfigDescription("The amount of seconds until the voting ends, after the first player voted.", new AcceptableValueRange<int>(3, 30)));
+            VotingTime = Config.Bind("General", "Voting Time", 10, new ConfigDescription("The amount of seconds until the voting ends, after the first player voted.", new AcceptableValueRange<int>(3, 30)));
+            CompatibilityPatches.RunPatches(Chainloader.PluginInfos.Select(x => (x.Key)).ToList());
 
             Initialize();
         }
@@ -124,7 +132,7 @@ namespace MapVote {
                 Harmony.PatchAll();
                 Logger.LogDebug($"Loaded {MOD_NAME}!");
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
                 Logger.LogError(e);
             }
@@ -142,7 +150,10 @@ namespace MapVote {
             OnSyncVotes = new NetworkedEvent("OnSyncVotes", HandleOnSyncVotes);
             OnStartCountdown = new NetworkedEvent("OnStartCountdown", HandleOnStartCountdown);
 
-            MenuAPI.AddElementToLobbyMenu(parent => MenuAPI.CreateREPOButton("Map Vote", () => CreateVotePopup(true), parent, new Vector2(175.2f, 62.8f)));
+            if(!HideInMenu)
+            {
+                MenuAPI.AddElementToLobbyMenu(parent => MenuAPI.CreateREPOButton("Map Vote", () => CreateVotePopup(true), parent, new Vector2(175.2f, 62.8f)));
+            }
         }
 
         public static void Reset()
@@ -169,12 +180,15 @@ namespace MapVote {
         {
             if (SemiFunc.IsMasterClient())
             {
+                UpdateButtonLabels();
                 return;
             }
 
             Dictionary<int, string> votes = (Dictionary<int, string>)data.CustomData;
             if (votes != null)
             {
+                Reset();
+                WonMap = null;
                 votes.ForEach(x =>
                 {
                     CurrentVotes[x.Key] = x.Value;
@@ -198,11 +212,11 @@ namespace MapVote {
 
         public static List<VoteOptionButton> GetSortedVoteOptions()
         {
-            return (VoteOptionButtons
+            return VoteOptionButtons
                     .Select(b => new { Item = b, Count = b.GetVotes(CurrentVotes.Values) })
                     .OrderByDescending(b => b.Count)
                     .Select(b => b.Item)
-                    ).ToList();
+                    .ToList();
         }
 
         public static void CreateNextMapLabel(string mapName)
@@ -214,13 +228,15 @@ namespace MapVote {
 
         public static IEnumerator WaitForVote()
         {
-            if(!SemiFunc.IsMasterClient()) {
-                yield break;
-            }
-
             while (CurrentVotes.Values.Count <= 0)
             {
+                UpdateButtonLabels();
                 yield return new WaitForSeconds(0.5f);
+            }
+
+            if (!SemiFunc.IsMasterClientOrSingleplayer())
+            {
+                yield break;
             }
 
             Instance.StartCoroutine(StartCountdown());
@@ -230,18 +246,24 @@ namespace MapVote {
 
         public static IEnumerator StartCountdown()
         {
-            if(SemiFunc.IsMasterClient())
+            if(SemiFunc.IsMasterClientOrSingleplayer())
             {
-                VotingTimeLeft = (float)VotingTime.Value;
+                VotingTimeLeft = VotingTime.Value;
                 OnStartCountdown?.RaiseEvent(VotingTimeLeft, NetworkingEvents.RaiseOthers, SendOptions.SendReliable);
             }
+
+            string format = "00.00";
+            var nfi = new NumberFormatInfo
+            {
+                NumberDecimalSeparator = ":"
+            };
 
             while (VotingTimeLeft > 0)
             {
                 VotingTimeLeft -= Time.deltaTime;
                 if(VotingTimeLabel != null)
                 {
-                    VotingTimeLabel.labelTMP.text = $"{VotingTimeLeft:0.00}";
+                    VotingTimeLabel.labelTMP.text = $"<mspace=0.5em>{VotingTimeLeft.ToString(format, nfi)}</mspace> Seconds Left";
                 }
                 yield return null;
             }
@@ -251,7 +273,7 @@ namespace MapVote {
                 Destroy(VotingTimeLabel.gameObject);
             }
 
-            if(SemiFunc.IsMasterClient())
+            if(SemiFunc.IsMasterClientOrSingleplayer())
             {
                 var map = GetWinningMap();
                 OnVoteEndedEvent?.RaiseEvent(map, NetworkingEvents.RaiseOthers, SendOptions.SendReliable);
@@ -291,7 +313,7 @@ namespace MapVote {
                             return;
                         }
                         OwnVoteLevel = level.name;
-                        OnVoteEvent?.RaiseEvent(level.name, REPOLib.Modules.NetworkingEvents.RaiseAll, SendOptions.SendReliable);
+                        OnVoteEvent?.RaiseEvent(level.name, NetworkingEvents.RaiseAll, SendOptions.SendReliable);
                     }, parent);
                     VoteOptionButtons.Add(new VoteOptionButton(level.name, 0, btn));
                     return btn.rectTransform;
@@ -307,7 +329,7 @@ namespace MapVote {
                         return;
                     }
                     OwnVoteLevel = VOTE_RANDOM_LABEL;
-                    OnVoteEvent?.RaiseEvent(VOTE_RANDOM_LABEL, REPOLib.Modules.NetworkingEvents.RaiseAll, SendOptions.SendReliable);
+                    OnVoteEvent?.RaiseEvent(VOTE_RANDOM_LABEL, NetworkingEvents.RaiseAll, SendOptions.SendReliable);
                 }, parent);
                 VoteOptionButtons.Add(new VoteOptionButton(VOTE_RANDOM_LABEL, 0, btn, true));
                 return btn.rectTransform;
@@ -332,6 +354,11 @@ namespace MapVote {
 
         public static List<VoteOptionButton> GetEligibleOptions()
         {
+            if(CurrentVotes.Values.Count == 0)
+            {
+                return new();
+            }
+
             List<VoteOptionButton> eligibleOptions = new();
 
             var sortedOptions = GetSortedVoteOptions();
