@@ -28,7 +28,7 @@ namespace MapVote {
         // Constants
         private const string MOD_GUID = "Patrick.MapVote";
         private const string MOD_NAME = "MapVote";
-        private const string MOD_VERSION = "1.0.0";
+        private const string MOD_VERSION = "1.0.1";
 
         public const string VOTE_RANDOM_LABEL = "Random";
         public const string TRUCK_LEVEL_NAME = "Level - Lobby";
