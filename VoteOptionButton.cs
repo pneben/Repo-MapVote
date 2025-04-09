@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using TMPro;
 using UnityEngine;
 
 namespace MapVote
@@ -33,14 +34,34 @@ namespace MapVote
             return votesNum;
         }
 
-        public void UpdateLabel(Dictionary<int, string> votes, string? _ownVote, bool _highlight = false)
+        public void UpdateLabel(bool _highlight = false, bool _disabled = false)
         {
-            var playerCount = Math.Min(GameDirector.instance.PlayerList.Count, 12);
+            var votes = MapVote.CurrentVotes.Values;
+            var ownVote = MapVote.OwnVoteLevel == Level;
+
+            var playerCount = Math.Max(Math.Min(GameDirector.instance.PlayerList.Count, 12), 4);
             var votesCount = GetVotes(votes);
-            Color mainColor = _highlight == true ? Color.green : _ownVote == Level ? Color.yellow : Color.white;
+            Color mainColor = _disabled ? Color.gray : (_highlight == true ? Color.green : ownVote ? Color.yellow : Color.white);
+
+            StringBuilder sb = new();
+
+            if (_disabled) sb.Append("<s>");
+
+            sb.Append($"<mspace=0.25em>[{Utilities.ColorString((ownVote || _highlight ? "X" : " "), mainColor)}]</mspace>  ");
+            if(!_disabled) sb.Append($"<color={LevelColorDictionary.GetColor(Level)}>");
+            sb.Append($"{(IsRandomButton ? MapVote.VOTE_RANDOM_LABEL : Utilities.RemoveLevelPrefix(Level))}");
+            if (!_disabled)
+            {
+                sb.Append("</color>");
+            }
+
+            if (_disabled) sb.Append("</s>");
+
+            var votesLabel = Button.transform.GetChild(1);
+            votesLabel.GetComponent<TextMeshProUGUI>().text = $"{Utilities.ColorString(new string('I', votesCount), Color.green)}{Utilities.ColorString(new string('I', playerCount - votesCount), Color.white)}";
 
             Button.labelTMP.text =
-                $"{Utilities.ColorString($"Vote for <color={LevelColorDictionary.GetColor(Level)}>{(IsRandomButton ? MapVote.VOTE_RANDOM_LABEL : Utilities.RemoveLevelPrefix(Level))}</color>\t   {Utilities.ColorString(new string('I', votesCount), Color.green)}{Utilities.ColorString(new string('I', playerCount - votesCount), Color.gray)}", mainColor)}";
+                $"{sb.ToString()}";
         }
     }
 }

@@ -15,7 +15,7 @@ namespace MapVote
         {
             Patches.Add("ViViKo.StartInShop", () =>
             {
-                MapVote.HideInMenu = true;
+                MapVote.HideInMenu.Value = true;
             });
         }
 

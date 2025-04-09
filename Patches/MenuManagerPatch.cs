@@ -17,7 +17,7 @@ namespace MapVote.Patches
                     MapVote.WonMap = null;
                 }
 
-                if(!MapVote.HideInMenu)
+                if(!MapVote.HideInMenu.Value)
                 {
                     MapVote.CreateVotePopup(true);
                 }

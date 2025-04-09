@@ -22,5 +22,6 @@ namespace MapVote
         {
             return text.Replace("Level - ", "");
         }
+
     }
 }

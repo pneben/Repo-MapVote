@@ -10,49 +10,47 @@ using BepInEx.Logging;
 using BepInEx;
 using MonoMod.RuntimeDetour;
 using System;
-using Photon.Realtime;
 using Sirenix.Serialization.Utilities;
 using MenuLib.MonoBehaviors;
 using BepInEx.Configuration;
 using BepInEx.Bootstrap;
-using System.Xml.Schema;
 using System.Globalization;
+using Unity.VisualScripting;
+using TMPro;
+using UnityEngine.UI;
 
 namespace MapVote {
-    [BepInPlugin(MOD_GUID, MOD_NAME, MOD_VERSION)]
+    [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
     [BepInDependency(REPOLib.MyPluginInfo.PLUGIN_GUID, BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("nickklmao.menulib", BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("ViViKo.StartInShop", BepInDependency.DependencyFlags.SoftDependency)]
     internal sealed class MapVote : BaseUnityPlugin
     {
         // Constants
-        private const string MOD_GUID = "Patrick.MapVote";
-        private const string MOD_NAME = "MapVote";
-        private const string MOD_VERSION = "1.0.1";
-
         public const string VOTE_RANDOM_LABEL = "Random";
         public const string TRUCK_LEVEL_NAME = "Level - Lobby";
+        public const string SHOP_LEVEL_NAME = "Level - Shop";
         public const string REQUEST_VOTE_LEVEL = TRUCK_LEVEL_NAME;
 
         public const bool IS_DEBUG = false;
-
-        // Flags
-        public static bool HideInMenu = false;
 
         // Harmony
         internal Harmony? Harmony { get; set; }
 
         // Logger
-        internal static readonly ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource(MOD_NAME);
+        internal static readonly ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource(MyPluginInfo.PLUGIN_NAME);
         
         // Network Events
         public static NetworkedEvent? OnVoteEvent;
         public static NetworkedEvent? OnVoteEndedEvent;
         public static NetworkedEvent? OnSyncVotes;
+        public static NetworkedEvent? OnSyncLastMapPlayed;
         public static NetworkedEvent? OnStartCountdown;
 
         // Configs
         public static ConfigEntry<int> VotingTime;
+        public static ConfigEntry<bool> HideInMenu;
+        public static ConfigEntry<bool> NoRepeatedMaps;
 
         // Vote Data
         public static VotesDictionary CurrentVotes = new() { };
@@ -67,7 +65,9 @@ namespace MapVote {
 
         public static bool DisableInput = false;
         public static bool ShouldHookRunMangerSetRunLevel = false;
-        
+
+        public static string? LastMapPlayed;
+
         public static MapVote Instance;
 
         private static Hook RunManagerSetRunLevelHook = new(
@@ -78,6 +78,10 @@ namespace MapVote {
             {
                 self.levelCurrent = self.levels.Find(x => x.name == WonMap);
                 ShouldHookRunMangerSetRunLevel = false;
+
+                LastMapPlayed = WonMap;
+                OnSyncLastMapPlayed?.RaiseEvent(LastMapPlayed, NetworkingEvents.RaiseOthers, SendOptions.SendReliable);
+
                 Reset();
                 WonMap = null;
                 return;
@@ -95,7 +99,7 @@ namespace MapVote {
                 return;
             }
 
-            if (ButtonStartHookRunAmount > 0 || HideInMenu)
+            if (ButtonStartHookRunAmount > 0 || HideInMenu.Value)
             {
                 ButtonStartHookRunAmount = 0;
                 orig(self);
@@ -120,9 +124,13 @@ namespace MapVote {
             Patch();
 
             VotingTime = Config.Bind("General", "Voting Time", 10, new ConfigDescription("The amount of seconds until the voting ends, after the first player voted.", new AcceptableValueRange<int>(3, 30)));
+            HideInMenu = Config.Bind("General", "Hide in Menu", false, new ConfigDescription("When true - hides the Menu in the lobby menu and randomly selects a random map - Voting is still enabled in the truck"));
+            NoRepeatedMaps = Config.Bind("General", "No Repeated Maps", false, new ConfigDescription("When true - disallows votes for the most recently played map - You won't play the same map twice in a row"));
+
             CompatibilityPatches.RunPatches(Chainloader.PluginInfos.Select(x => (x.Key)).ToList());
 
             Initialize();
+            Logger.LogDebug($"Loaded {MyPluginInfo.PLUGIN_NAME} V{MyPluginInfo.PLUGIN_VERSION}!");
         }
         internal void Patch()
         {
@@ -130,7 +138,6 @@ namespace MapVote {
             {
                 Harmony ??= new Harmony(Info.Metadata.GUID);
                 Harmony.PatchAll();
-                Logger.LogDebug($"Loaded {MOD_NAME}!");
             }
             catch (Exception e)
             {
@@ -148,12 +155,20 @@ namespace MapVote {
             OnVoteEvent = new NetworkedEvent("OnVoteEvent", HandleOnVoteEvent);
             OnVoteEndedEvent = new NetworkedEvent("OnVoteEndedEvent", HandleOnVoteEndEvent);
             OnSyncVotes = new NetworkedEvent("OnSyncVotes", HandleOnSyncVotes);
+            OnSyncLastMapPlayed = new NetworkedEvent("OnSyncLastMapPlayed", HandleOnSyncLastMapPlayed);
             OnStartCountdown = new NetworkedEvent("OnStartCountdown", HandleOnStartCountdown);
 
-            if(!HideInMenu)
+            if(!HideInMenu.Value)
             {
                 MenuAPI.AddElementToLobbyMenu(parent => MenuAPI.CreateREPOButton("Map Vote", () => CreateVotePopup(true), parent, new Vector2(175.2f, 62.8f)));
             }
+        }
+
+        public static bool HasBeenLastPlayed(string? level)
+        {
+            if (level == null || NoRepeatedMaps.Value == false) return false;
+
+            return (LastMapPlayed == level && LastMapPlayed != WonMap);
         }
 
         public static void Reset()
@@ -163,6 +178,14 @@ namespace MapVote {
             OwnVoteLevel = null;
             UpdateButtonLabels();
         }
+        private static void HandleOnSyncLastMapPlayed(EventData data)
+        {
+            string lastMap = (string)data.CustomData;
+
+            LastMapPlayed = lastMap;
+            WonMap = null;
+        }
+
         private static void HandleOnStartCountdown(EventData data)
         {
             if (SemiFunc.IsMasterClient())
@@ -297,7 +320,7 @@ namespace MapVote {
                 GameDirector.instance.DisableInput = true;
             }
 
-            VotePopup = MenuAPI.CreateREPOPopupPage("Next map", true, false, 0f, isInMenu ? new Vector2(40f, 0f) : new Vector2(-100f,0f));
+            VotePopup = MenuAPI.CreateREPOPopupPage("Next map", true, !isInMenu, 0f, isInMenu ? new Vector2(40f, 0f) : new Vector2(-100f,0f));
             var runManger = FindObjectOfType<RunManager>();
 
             var levels = runManger.levels;
@@ -305,6 +328,7 @@ namespace MapVote {
             // Generate Vote Options from Levels
             foreach (var (level, index) in levels.Select((level, index) => (level, index)))
             {
+                var name = level.name;
                 VotePopup.AddElementToScrollView(parent =>
                 {
                     var btn = MenuAPI.CreateREPOButton(null, () => {
@@ -312,15 +336,28 @@ namespace MapVote {
                         {
                             return;
                         }
-                        OwnVoteLevel = level.name;
-                        OnVoteEvent?.RaiseEvent(level.name, NetworkingEvents.RaiseAll, SendOptions.SendReliable);
+                        OwnVoteLevel = name;
+                        OnVoteEvent?.RaiseEvent(name, NetworkingEvents.RaiseAll, SendOptions.SendReliable);
                     }, parent);
-                    VoteOptionButtons.Add(new VoteOptionButton(level.name, 0, btn));
+
+                    if(HasBeenLastPlayed(name))
+                    {
+                        btn.gameObject.GetComponent<MenuButton>().disabled = true;
+                    }
+
+                    var layoutGroup = btn.AddComponent<HorizontalLayoutGroup>();
+                    layoutGroup.spacing = 235f;
+
+                    var votesLabel = GameObject.Instantiate(btn.labelTMP.gameObject, btn.transform);
+                    var lbl = votesLabel.GetComponent<TextMeshProUGUI>();
+                    lbl.horizontalAlignment = HorizontalAlignmentOptions.Right;
+
+                    VoteOptionButtons.Add(new VoteOptionButton(name, 0, btn));
                     return btn.rectTransform;
                 });
             }
 
-            // Generate "I don't care" Vote Option
+            // Generate "Random" Vote Option
             VotePopup.AddElementToScrollView(parent =>
             {
                 var btn = MenuAPI.CreateREPOButton(null, () => {
@@ -331,6 +368,14 @@ namespace MapVote {
                     OwnVoteLevel = VOTE_RANDOM_LABEL;
                     OnVoteEvent?.RaiseEvent(VOTE_RANDOM_LABEL, NetworkingEvents.RaiseAll, SendOptions.SendReliable);
                 }, parent);
+
+                var layoutGroup = btn.AddComponent<HorizontalLayoutGroup>();
+                layoutGroup.spacing = 235f;
+
+                var votesLabel = GameObject.Instantiate(btn.labelTMP.gameObject, btn.transform);
+                var lbl = votesLabel.GetComponent<TextMeshProUGUI>();
+                lbl.horizontalAlignment = HorizontalAlignmentOptions.Right;
+
                 VoteOptionButtons.Add(new VoteOptionButton(VOTE_RANDOM_LABEL, 0, btn, true));
                 return btn.rectTransform;
             });
@@ -348,7 +393,7 @@ namespace MapVote {
         {
             VoteOptionButtons.ForEach(b =>
             {
-                b.UpdateLabel(CurrentVotes.Values, OwnVoteLevel);
+                b.UpdateLabel(false, HasBeenLastPlayed(b.Level));
             });
         }
 
@@ -356,7 +401,7 @@ namespace MapVote {
         {
             if(CurrentVotes.Values.Count == 0)
             {
-                return new();
+                return VoteOptionButtons.FindAll(x => x.IsRandomButton == false);
             }
 
             List<VoteOptionButton> eligibleOptions = new();
@@ -374,7 +419,18 @@ namespace MapVote {
                 eligibleOptions = mostVoted ?? eligibleOptions;
             }
 
-            eligibleOptions = eligibleOptions.FindAll(x => x.IsRandomButton == false);
+            if (NoRepeatedMaps.Value)
+            {
+                eligibleOptions = eligibleOptions.FindAll(x => !HasBeenLastPlayed(x.Level));
+            }
+
+            // Fallback
+            if (eligibleOptions.FindAll(x => !x.IsRandomButton).Count <= 0)
+            {
+                eligibleOptions = VoteOptionButtons;
+            }
+
+            eligibleOptions.RemoveAll(x => x.IsRandomButton);
 
             return eligibleOptions;
         }
@@ -449,10 +505,10 @@ namespace MapVote {
 
             while (currentBlink < maxBlinks) 
             {
-                voteOption.UpdateLabel(CurrentVotes.Values, OwnVoteLevel, true);
+                voteOption.UpdateLabel(true);
                 yield return new WaitForSeconds(blinkFrequency / 2);
 
-                voteOption.UpdateLabel(CurrentVotes.Values, OwnVoteLevel, false);
+                voteOption.UpdateLabel(false);
                 yield return new WaitForSeconds(blinkFrequency / 2);
                 currentBlink++;
             }
@@ -472,11 +528,11 @@ namespace MapVote {
 
             while (index != endIndex || delay < maxDelay)
             {
-                eligibleOptions[index].UpdateLabel(CurrentVotes.Values, OwnVoteLevel, true);
+                eligibleOptions[index].UpdateLabel(true);
 
                 if (recentIndex >= 0)
                 {
-                    eligibleOptions[recentIndex].UpdateLabel(CurrentVotes.Values, OwnVoteLevel, false);
+                    eligibleOptions[recentIndex].UpdateLabel(false);
                 }
 
                 yield return new WaitForSeconds(delay);
@@ -491,7 +547,7 @@ namespace MapVote {
                 index = (index + 1) % eligibleOptions.Count;
             }
 
-            eligibleOptions[recentIndex].UpdateLabel(CurrentVotes.Values, OwnVoteLevel, false);
+            eligibleOptions[recentIndex].UpdateLabel(false);
         }
     }
 }
